@@ -3,6 +3,7 @@ name: Build ZIBO Keyboard Input Plugin
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -78,11 +79,11 @@ jobs:
         path: build/${{ matrix.artifact_name }}
         retention-days: 30
 
-  release:
+  package:
     name: Create Release Package
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     
     steps:
     - uses: actions/checkout@v4
@@ -99,10 +100,17 @@ jobs:
         cp artifacts/zibo-keyboard-plugin-mac/mac.xpl release/ZIBOKeyboardInput/
         cp artifacts/zibo-keyboard-plugin-linux/lin.xpl release/ZIBOKeyboardInput/
         
+        # Get version from VERSION file or tag
+        if [ -f VERSION ]; then
+          VERSION=$(cat VERSION)
+        else
+          VERSION="dev"
+        fi
+        
         # Create installation instructions file
-        cat > release/ZIBOKeyboardInput/README.txt << 'EOF'
-        ZIBO Keyboard Input Plugin Installation Guide
-        ===========================================
+        cat > release/ZIBOKeyboardInput/README.txt << EOF
+        ZIBO Keyboard Input Plugin v${VERSION}
+        =====================================
         
         Choose the correct plugin file for your platform:
         - Windows: win.xpl
@@ -121,8 +129,8 @@ jobs:
           * 3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_FO
         - Toggle keyboard input on/off as needed
         
-        Build: $(date '+%Y-%m-%d %H:%M:%S') UTC
-        Commit: ${{ github.sha }}
+        Build: \$(date '+%Y-%m-%d %H:%M:%S') UTC
+        Commit: \${{ github.sha }}
         EOF
         
         cd release
@@ -134,3 +142,65 @@ jobs:
         name: zibo-keyboard-plugin-all-platforms
         path: release/ZIBOKeyboardInput.tar.gz
         retention-days: 90
+
+  release:
+    name: Create GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Download release package
+      uses: actions/download-artifact@v4
+      with:
+        name: zibo-keyboard-plugin-all-platforms
+        path: ./
+    
+    - name: Download individual platform artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+    
+    - name: Get version and changelog info
+      id: version
+      run: |
+        # Extract version from tag (remove 'v' prefix if present)
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Try to get previous tag for changelog
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+        fi
+        
+        # Generate basic changelog from commits
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "## What's Changed" > CHANGELOG.md
+          git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> CHANGELOG.md
+        else
+          echo "## What's New" > CHANGELOG.md
+          echo "- Initial release" >> CHANGELOG.md
+        fi
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: ZIBO Keyboard Input Plugin v${{ steps.version.outputs.version }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+        files: |
+          ZIBOKeyboardInput.tar.gz
+          artifacts/zibo-keyboard-plugin-windows/win.xpl
+          artifacts/zibo-keyboard-plugin-mac/mac.xpl
+          artifacts/zibo-keyboard-plugin-linux/lin.xpl
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
