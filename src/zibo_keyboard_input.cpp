@@ -107,12 +107,12 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_BACK] = "clr";          // Backspace -> Clear
     g_key_mappings[XPLM_VK_SPACE] = "SP";          // Space -> SP
     g_key_mappings[XPLM_VK_DELETE] = "del";        // Delete -> Delete
-    g_key_mappings[XPLM_VK_SLASH] = "/";           // Forward slash - main keyboard
-    g_key_mappings[XPLM_VK_DIVIDE] = "/";          // Forward slash - numpad
-    g_key_mappings[XPLM_VK_PERIOD] = ".";          // Period/decimal point - try actual symbol
-    g_key_mappings[XPLM_VK_MINUS] = "-";           // Minus sign - try actual symbol
-    g_key_mappings[XPLM_VK_SUBTRACT] = "-";        // Numpad minus - try actual symbol
-    g_key_mappings[XPLM_VK_ADD] = "+";             // Numpad plus - try actual symbol
+    g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash - main keyboard
+    g_key_mappings[XPLM_VK_DIVIDE] = "slash";      // Forward slash - numpad
+    g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point
+    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign - main keyboard
+    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Minus sign - numpad
+    g_key_mappings[XPLM_VK_ADD] = "plus";          // Plus sign - numpad
     // Note: XPLM_VK_EQUAL (= key) is handled specially in KeyCallback for Shift+Equal = Plus
 }
 
@@ -182,12 +182,15 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         return 1; // Let other handlers (like key commands) process modifier key combinations
     }
     
+    // Fix for signed char issue - convert to unsigned char for proper key lookup
+    unsigned char virtualKey = (unsigned char)inVirtualKey;
+    
     // Special handling for Shift+Equal = Plus
     const char* button_name = nullptr;
     if (hasShiftEqual) {
-        button_name = "+";  // Shift+Equal produces Plus - use actual symbol
+        button_name = "plus";  // Shift+Equal produces Plus
     } else {
-        auto it = g_key_mappings.find(inVirtualKey);
+        auto it = g_key_mappings.find(virtualKey);  // Use unsigned virtual key
         if (it != g_key_mappings.end()) {
             button_name = it->second;
         }
@@ -201,7 +204,7 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         // Debug logging
         char debug_msg[512];
         snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s (VK: 0x%02X, Flags: 0x%02X)", 
-                command_string, inVirtualKey, inFlags);
+                command_string, virtualKey, inFlags);
         LogMessage(debug_msg);
         
         // Execute the command
@@ -217,7 +220,7 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         }
     } else {
         char debug_msg[256];
-        snprintf(debug_msg, sizeof(debug_msg), "No mapping found for VK: 0x%02X", inVirtualKey);
+        snprintf(debug_msg, sizeof(debug_msg), "No mapping found for VK: 0x%02X (signed: %d)", virtualKey, inVirtualKey);
         LogMessage(debug_msg);
     }
     
