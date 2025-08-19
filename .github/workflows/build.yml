@@ -1,0 +1,140 @@
+name: Build ZIBO Keyboard Input Plugin
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build Plugin
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform: windows
+            artifact_name: win.xpl
+          - os: macos-latest
+            platform: mac
+            artifact_name: mac.xpl
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: lin.xpl
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+      shell: pwsh
+    
+    - name: Verify CMake installation (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Restart PowerShell session to ensure environment variables take effect
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+        cmake --version
+      shell: pwsh
+    
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake
+    
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Run configuration tests
+      run: |
+        python test_cross_platform.py
+    
+    - name: Build plugin (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Ensure environment variables are set correctly
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+        python build_all.py --platform ${{ matrix.platform }}
+      shell: pwsh
+    
+    - name: Build plugin (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        python build_all.py --platform ${{ matrix.platform }}
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zibo-keyboard-plugin-${{ matrix.platform }}
+        path: build/${{ matrix.artifact_name }}
+        retention-days: 30
+
+  release:
+    name: Create Release Package
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+    
+    - name: Create release package
+      run: |
+        mkdir -p release/ZIBOKeyboardInput
+        cp artifacts/zibo-keyboard-plugin-windows/win.xpl release/ZIBOKeyboardInput/
+        cp artifacts/zibo-keyboard-plugin-mac/mac.xpl release/ZIBOKeyboardInput/
+        cp artifacts/zibo-keyboard-plugin-linux/lin.xpl release/ZIBOKeyboardInput/
+        
+        # Create installation instructions file
+        cat > release/ZIBOKeyboardInput/README.txt << 'EOF'
+        ZIBO Keyboard Input Plugin Installation Guide
+        ===========================================
+        
+        Choose the correct plugin file for your platform:
+        - Windows: win.xpl
+        - macOS: mac.xpl  
+        - Linux: lin.xpl
+        
+        Installation:
+        1. Copy the appropriate .xpl file to your X-Plane installation
+        2. Place it in: Resources/plugins/ZIBOKeyboardInput/
+        3. Restart X-Plane
+        
+        Usage:
+        - Load ZIBO 737 aircraft in X-Plane
+        - Bind keys to these commands in Settings > Keyboard:
+          * 3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain
+          * 3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_FO
+        - Toggle keyboard input on/off as needed
+        
+        Build: $(date '+%Y-%m-%d %H:%M:%S') UTC
+        Commit: ${{ github.sha }}
+        EOF
+        
+        cd release
+        tar -czf ZIBOKeyboardInput.tar.gz ZIBOKeyboardInput/
+    
+    - name: Upload release package
+      uses: actions/upload-artifact@v4
+      with:
+        name: zibo-keyboard-plugin-all-platforms
+        path: release/ZIBOKeyboardInput.tar.gz
+        retention-days: 90
