@@ -107,13 +107,20 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_BACK] = "clr";          // Backspace -> Clear
     g_key_mappings[XPLM_VK_SPACE] = "SP";          // Space -> SP
     g_key_mappings[XPLM_VK_DELETE] = "del";        // Delete -> Delete
-    g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash - main keyboard
-    g_key_mappings[XPLM_VK_DIVIDE] = "slash";      // Forward slash - numpad
-    g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point
-    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign - main keyboard
-    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Minus sign - numpad
-    g_key_mappings[XPLM_VK_ADD] = "plus";          // Plus sign - numpad
-    // Note: XPLM_VK_EQUAL (= key) is handled specially in KeyCallback for Shift+Equal = Plus
+    g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash - main keyboard (0xB8)
+    g_key_mappings[XPLM_VK_DIVIDE] = "slash";      // Forward slash - numpad (0x6F)
+    g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point (0xB9)
+    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign - main keyboard (0xB1)
+    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Minus sign - numpad (0x6D)
+    g_key_mappings[XPLM_VK_ADD] = "plus_special";  // Plus sign - numpad (0x6B) - special handling
+    // Note: XPLM_VK_EQUAL (0xB0) is handled specially in KeyCallback for Shift+Equal = Plus
+    
+    // Debug: Log the critical key mappings
+    LogMessage("Key mappings initialized:");
+    char mapping_info[256];
+    snprintf(mapping_info, sizeof(mapping_info), "  MINUS(0xB1)→%s, SUBTRACT(0x6D)→%s, ADD(0x6B)→%s, EQUAL(0xB0)→double_minus", 
+             g_key_mappings[XPLM_VK_MINUS], g_key_mappings[XPLM_VK_SUBTRACT], g_key_mappings[XPLM_VK_ADD]);
+    LogMessage(mapping_info);
 }
 
 // Check if current aircraft is ZIBO 737
@@ -175,24 +182,36 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         return 1; // Let other handlers process the key
     }
     
+    // Fix for signed char issue - convert to unsigned char for proper key lookup first
+    unsigned char virtualKey = (unsigned char)inVirtualKey;
+    
     // Check if any modifier keys are pressed - but allow Shift+Equal for plus sign
     // This fixes the issue where combo keys (like CTRL+SHIFT+I) still input letters to FMC
-    bool hasShiftEqual = (inFlags & xplm_ShiftFlag) && (inVirtualKey == XPLM_VK_EQUAL);
+    // Use unsigned comparison to fix the signed char issue
+    bool hasShiftEqual = (inFlags & xplm_ShiftFlag) && (virtualKey == XPLM_VK_EQUAL);
     if ((inFlags & (xplm_ShiftFlag | xplm_OptionAltFlag | xplm_ControlFlag)) && !hasShiftEqual) {
         return 1; // Let other handlers (like key commands) process modifier key combinations
     }
     
-    // Fix for signed char issue - convert to unsigned char for proper key lookup
-    unsigned char virtualKey = (unsigned char)inVirtualKey;
-    
     // Special handling for Shift+Equal = Plus
+    // Since ZIBO FMC doesn't have a direct "plus" command, we use the minus key twice
+    // because ZIBO has internal logic: first minus = "-", second minus = "+"
     const char* button_name = nullptr;
+    bool needsDoubleMinus = false;
+    
     if (hasShiftEqual) {
-        button_name = "plus";  // Shift+Equal produces Plus
+        button_name = "minus";  // Use minus key for plus (will be pressed twice)
+        needsDoubleMinus = true;  // Flag to press minus twice for plus
     } else {
         auto it = g_key_mappings.find(virtualKey);  // Use unsigned virtual key
         if (it != g_key_mappings.end()) {
-            button_name = it->second;
+            if (strcmp(it->second, "plus_special") == 0) {
+                // Numpad plus key also uses double minus technique
+                button_name = "minus";
+                needsDoubleMinus = true;
+            } else {
+                button_name = it->second;
+            }
         }
     }
     
@@ -201,17 +220,33 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         char command_string[256];
         snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
         
-        // Debug logging
+        // Debug logging with more detail
         char debug_msg[512];
-        snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s (VK: 0x%02X, Flags: 0x%02X)", 
-                command_string, virtualKey, inFlags);
+        if (needsDoubleMinus) {
+            const char* plus_source = hasShiftEqual ? "Shift+Equal" : "Numpad Plus";
+            snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s x2 (VK: 0x%02X, Flags: 0x%02X) [%s -> Double Minus for Plus]", 
+                    command_string, virtualKey, inFlags, plus_source);
+        } else {
+            snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s (VK: 0x%02X, Flags: 0x%02X) [Normal key: %s]", 
+                    command_string, virtualKey, inFlags, button_name);
+        }
         LogMessage(debug_msg);
         
         // Execute the command
         XPLMCommandRef command = XPLMFindCommand(command_string);
         if (command != NULL) {
             XPLMCommandOnce(command);
-            LogMessage("Command executed successfully");
+            
+            // For plus sign (Shift+Equal), execute minus command twice
+            // because ZIBO FMC toggles between minus and plus on repeated presses
+            if (needsDoubleMinus) {
+                // Small delay between commands to ensure proper processing
+                // Note: This is a simple approach, could be improved with a timer
+                XPLMCommandOnce(command);  // Execute minus a second time to get plus
+                LogMessage("Double minus command executed for plus sign");
+            } else {
+                LogMessage("Command executed successfully");
+            }
             return 0; // Consume the key event
         } else {
             char error_msg[256];
