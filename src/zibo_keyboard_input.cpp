@@ -37,7 +37,7 @@
 
 // Plugin information
 #define PLUGIN_NAME "ZIBO Keyboard Input"
-#define PLUGIN_SIG "3370tech.zibo.keyboard"
+#define PLUGIN_SIG "justin.zibo.keyboard"
 #define PLUGIN_DESC "Keyboard input handler for ZIBO 737 FMC"
 
 // Global state variables
@@ -107,11 +107,12 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_BACK] = "clr";          // Backspace -> Clear
     g_key_mappings[XPLM_VK_SPACE] = "SP";          // Space -> SP
     g_key_mappings[XPLM_VK_DELETE] = "del";        // Delete -> Delete
-    g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash
-    g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point
-    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign
-    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Numpad minus
-    g_key_mappings[XPLM_VK_ADD] = "plus";          // Numpad plus
+    g_key_mappings[XPLM_VK_SLASH] = "/";           // Forward slash - main keyboard
+    g_key_mappings[XPLM_VK_DIVIDE] = "/";          // Forward slash - numpad
+    g_key_mappings[XPLM_VK_PERIOD] = ".";          // Period/decimal point - try actual symbol
+    g_key_mappings[XPLM_VK_MINUS] = "-";           // Minus sign - try actual symbol
+    g_key_mappings[XPLM_VK_SUBTRACT] = "-";        // Numpad minus - try actual symbol
+    g_key_mappings[XPLM_VK_ADD] = "+";             // Numpad plus - try actual symbol
     // Note: XPLM_VK_EQUAL (= key) is handled specially in KeyCallback for Shift+Equal = Plus
 }
 
@@ -184,7 +185,7 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
     // Special handling for Shift+Equal = Plus
     const char* button_name = nullptr;
     if (hasShiftEqual) {
-        button_name = "plus";  // Shift+Equal produces Plus
+        button_name = "+";  // Shift+Equal produces Plus - use actual symbol
     } else {
         auto it = g_key_mappings.find(inVirtualKey);
         if (it != g_key_mappings.end()) {
@@ -197,12 +198,27 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         char command_string[256];
         snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
         
+        // Debug logging
+        char debug_msg[512];
+        snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s (VK: 0x%02X, Flags: 0x%02X)", 
+                command_string, inVirtualKey, inFlags);
+        LogMessage(debug_msg);
+        
         // Execute the command
         XPLMCommandRef command = XPLMFindCommand(command_string);
         if (command != NULL) {
             XPLMCommandOnce(command);
+            LogMessage("Command executed successfully");
             return 0; // Consume the key event
+        } else {
+            char error_msg[256];
+            snprintf(error_msg, sizeof(error_msg), "Command not found: %s", command_string);
+            LogMessage(error_msg);
         }
+    } else {
+        char debug_msg[256];
+        snprintf(debug_msg, sizeof(debug_msg), "No mapping found for VK: 0x%02X", inVirtualKey);
+        LogMessage(debug_msg);
     }
     
     return 1; // Let other handlers process the key
@@ -270,9 +286,9 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     g_icao_dataref = XPLMFindDataRef("sim/aircraft/view/acf_ICAO");
     
     // Create custom commands
-    g_captain_command = XPLMCreateCommand("3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain", 
+    g_captain_command = XPLMCreateCommand("zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain", 
                                         "Toggle Keyboard Input (Captain)");
-    g_fo_command = XPLMCreateCommand("3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_FO", 
+    g_fo_command = XPLMCreateCommand("zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO", 
                                    "Toggle Keyboard Input (FO)");
     
     // Register command handlers

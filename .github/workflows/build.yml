@@ -184,8 +184,8 @@ jobs:
         Usage:
         - Load ZIBO 737 aircraft in X-Plane
         - Bind keys to these commands in Settings > Keyboard:
-          * 3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain
-          * 3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_FO
+          * zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain
+          * zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO
         - Toggle keyboard input on/off as needed
         
         Build: \$(date '+%Y-%m-%d %H:%M:%S') UTC

@@ -85,8 +85,8 @@ When keyboard input is enabled, the following keys are mapped to FMC buttons:
 
 The plugin provides two X-Plane commands that you can bind to keyboard shortcuts or joystick buttons:
 
-- `3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain` - Toggle Captain FMC keyboard input
-- `3370Tech/ZIBO_Keyboard/Toggle_Keyboard_Input_FO` - Toggle First Officer FMC keyboard input
+- `zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain` - Toggle Captain FMC keyboard input
+- `zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO` - Toggle First Officer FMC keyboard input
 
 ### Visual Indicators
 
@@ -180,7 +180,7 @@ The plugin supports the following architectures:
 
 #### Commands Not Appearing
 - Restart X-Plane after installing the plugin
-- Search for commands starting with "3370Tech" in Settings > Keyboard
+- Search for commands starting with "zibo" in Settings > Keyboard
 
 ## 🤝 Contributing
 
@@ -212,7 +212,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Original Lua Script**: 3370Tech and Justin
+- **Original Lua Script**: Justin
 - **ZIBO 737**: Outstanding work by the Zibo aircraft development team
 - **X-Plane SDK**: Laminar Research for the comprehensive development tools
 - **Community**: All beta testers and contributors
