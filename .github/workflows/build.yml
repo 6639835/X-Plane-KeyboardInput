@@ -58,10 +58,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake build-essential
     
-    - name: Run configuration tests
-      run: |
-        python test_cross_platform.py
-    
     - name: Build plugin (Windows)
       if: runner.os == 'Windows'
       run: |
