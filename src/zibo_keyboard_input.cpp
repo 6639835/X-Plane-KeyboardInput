@@ -29,10 +29,10 @@
 #include <stdlib.h>
 #include <map>
 
-#if APL || LIN
+#if APL
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
-#elif IBM
+#elif IBM || LIN
 #include <GL/gl.h>
 #endif
 
