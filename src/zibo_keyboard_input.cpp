@@ -172,6 +172,12 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         return 1; // Let other handlers process the key
     }
     
+    // Check if any modifier keys are pressed - if so, let other handlers process
+    // This fixes the issue where combo keys (like CTRL+SHIFT+I) still input letters to FMC
+    if (inFlags & (xplm_ShiftFlag | xplm_OptionAltFlag | xplm_ControlFlag)) {
+        return 1; // Let other handlers (like key commands) process modifier key combinations
+    }
+    
     auto it = g_key_mappings.find(inVirtualKey);
     if (it != g_key_mappings.end()) {
         // Build command string
@@ -204,21 +210,17 @@ static int DrawCallback(XPLMDrawingPhase /*inPhase*/, int /*inIsBefore*/, void* 
     // Prepare text
     const char* side_text = (g_fmc_side == 1) ? "CAP" : "FO";
     char full_text[64];
-    snprintf(full_text, sizeof(full_text), "%s Keyboard Input Enabled", side_text);
+    snprintf(full_text, sizeof(full_text), "%s FMC Keyboard Input Enabled", side_text);
     
     // Set up OpenGL for 2D drawing
     XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
     
-    // Set color to red for text drawing
-    float red_color[3] = {1.0f, 0.0f, 0.0f};
+    // Set color to green for better visibility and less intrusive
+    float green_color[3] = {0.0f, 1.0f, 0.0f};
     
-    // Draw status text in top-left corner
-    XPLMDrawString(red_color, 50, screenHeight - 50, full_text, NULL, xplmFont_Proportional);
-    
-    // Get mouse position and draw indicator near cursor
-    int mouseX, mouseY;
-    XPLMGetMouseLocation(&mouseX, &mouseY);
-    XPLMDrawString(red_color, mouseX + 15, mouseY + 5, side_text, NULL, xplmFont_Proportional);
+    // Only draw status text in top-left corner, remove the mouse cursor indicator
+    // This fixes the issue where "CAP" text appears on ND and other displays
+    XPLMDrawString(green_color, 50, screenHeight - 50, full_text, NULL, xplmFont_Proportional);
     
     return 1;
 }
