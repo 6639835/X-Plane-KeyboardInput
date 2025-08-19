@@ -111,6 +111,8 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point
     g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign
     g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Numpad minus
+    g_key_mappings[XPLM_VK_ADD] = "plus";          // Numpad plus
+    // Note: XPLM_VK_EQUAL (= key) is handled specially in KeyCallback for Shift+Equal = Plus
 }
 
 // Check if current aircraft is ZIBO 737
@@ -172,17 +174,28 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         return 1; // Let other handlers process the key
     }
     
-    // Check if any modifier keys are pressed - if so, let other handlers process
+    // Check if any modifier keys are pressed - but allow Shift+Equal for plus sign
     // This fixes the issue where combo keys (like CTRL+SHIFT+I) still input letters to FMC
-    if (inFlags & (xplm_ShiftFlag | xplm_OptionAltFlag | xplm_ControlFlag)) {
+    bool hasShiftEqual = (inFlags & xplm_ShiftFlag) && (inVirtualKey == XPLM_VK_EQUAL);
+    if ((inFlags & (xplm_ShiftFlag | xplm_OptionAltFlag | xplm_ControlFlag)) && !hasShiftEqual) {
         return 1; // Let other handlers (like key commands) process modifier key combinations
     }
     
-    auto it = g_key_mappings.find(inVirtualKey);
-    if (it != g_key_mappings.end()) {
+    // Special handling for Shift+Equal = Plus
+    const char* button_name = nullptr;
+    if (hasShiftEqual) {
+        button_name = "plus";  // Shift+Equal produces Plus
+    } else {
+        auto it = g_key_mappings.find(inVirtualKey);
+        if (it != g_key_mappings.end()) {
+            button_name = it->second;
+        }
+    }
+    
+    if (button_name != nullptr) {
         // Build command string
         char command_string[256];
-        snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, it->second);
+        snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
         
         // Execute the command
         XPLMCommandRef command = XPLMFindCommand(command_string);
