@@ -29,12 +29,7 @@
 #include <stdlib.h>
 #include <map>
 
-#if APL
-#define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl.h>
-#elif IBM || LIN
-#include <GL/gl.h>
-#endif
+// OpenGL headers not needed - using X-Plane SDK graphics functions only
 
 #if IBM
 #include <windows.h>
