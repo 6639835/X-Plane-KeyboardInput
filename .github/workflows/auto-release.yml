@@ -1,0 +1,133 @@
+name: Auto Release on Version Change
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'VERSION' ]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  auto-release:
+    name: Auto Create Release Tag
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Read VERSION file
+      id: version
+      run: |
+        if [ ! -f VERSION ]; then
+          echo "VERSION file not found!"
+          exit 1
+        fi
+        
+        VERSION=$(cat VERSION | tr -d '\n' | tr -d '\r')
+        echo "Found version: $VERSION"
+        
+        # Validate version format (basic semver check)
+        if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+          echo "Invalid version format: $VERSION"
+          echo "Expected format: X.Y.Z or X.Y.Z-suffix (e.g., 1.0.0 or 1.0.0-beta.1)"
+          exit 1
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Check if tag already exists
+      id: check_tag
+      run: |
+        TAG="v${{ steps.version.outputs.version }}"
+        if git tag -l | grep -q "^$TAG$"; then
+          echo "Tag $TAG already exists, skipping release creation"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Tag $TAG does not exist, will create release"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Get commit message for version change
+      id: commit_info
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        # Get the commit message that changed the VERSION file
+        COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+        echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+        
+        # Check if this is a major/minor/patch release based on version
+        VERSION="${{ steps.version.outputs.version }}"
+        if [[ $VERSION =~ -[a-zA-Z] ]]; then
+          echo "release_type=prerelease" >> $GITHUB_OUTPUT
+        else
+          echo "release_type=release" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create and push tag
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        TAG="${{ steps.version.outputs.tag }}"
+        VERSION="${{ steps.version.outputs.version }}"
+        
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Create annotated tag with release notes
+        git tag -a $TAG -m "Release $VERSION
+
+        Auto-generated release from VERSION file update.
+        
+        Original commit: ${{ steps.commit_info.outputs.commit_message }}
+        Released: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+        
+        # Push the tag
+        git push origin $TAG
+        
+        echo "✅ Created and pushed tag: $TAG"
+        echo "🚀 This will trigger the build and release workflow automatically!"
+    
+    - name: Create release summary
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        cat >> $GITHUB_STEP_SUMMARY << EOF
+        # 🚀 Automated Release Created!
+        
+        **Version:** ${{ steps.version.outputs.version }}
+        **Tag:** ${{ steps.version.outputs.tag }}
+        **Type:** ${{ steps.commit_info.outputs.release_type }}
+        
+        ## What happens next:
+        
+        1. ✅ Tag \`${{ steps.version.outputs.tag }}\` has been created and pushed
+        2. 🔄 Build workflow will automatically start building all platforms
+        3. 📦 Release will be created with all platform files attached
+        4. 🎉 Release will be available in the [Releases section](https://github.com/${{ github.repository }}/releases)
+        
+        ## Original commit:
+        > ${{ steps.commit_info.outputs.commit_message }}
+        EOF
+    
+    - name: Tag already exists
+      if: steps.check_tag.outputs.exists == 'true'
+      run: |
+        echo "ℹ️ Tag v${{ steps.version.outputs.version }} already exists, no action needed."
+        
+        cat >> $GITHUB_STEP_SUMMARY << EOF
+        # ℹ️ Version Already Released
+        
+        **Version:** ${{ steps.version.outputs.version }}
+        **Status:** Tag \`v${{ steps.version.outputs.version }}\` already exists
+        
+        No new release will be created. If you want to create a new release:
+        
+        1. Update the VERSION file with a new version number
+        2. Commit and push the change
+        3. The automated release will trigger
+        EOF
