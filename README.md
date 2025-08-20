@@ -224,6 +224,8 @@ For questions or discussions, please create an issue or use GitHub Discussions.
 
 **Code of Conduct:** This project follows our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a welcoming environment for all contributors.
 
+**Security:** For security-related concerns, please review our [Security Policy](SECURITY.md) and follow the responsible disclosure process outlined there.
+
 ## 🔧 Technical Overview
 
 This plugin operates by:

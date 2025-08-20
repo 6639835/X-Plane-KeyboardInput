@@ -6,6 +6,16 @@ Thank you for your interest in contributing to the ZIBO Keyboard Input Plugin! T
 
 This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior through the channels outlined in the Code of Conduct.
 
+## 🔒 Security Policy
+
+Security is a top priority for this X-Plane plugin. Please review our [Security Policy](SECURITY.md) for:
+- Supported versions and security update policy
+- Security best practices for users and developers
+- Vulnerability reporting process and responsible disclosure guidelines
+- Plugin-specific security considerations
+
+**Important**: Never report security vulnerabilities through public GitHub issues. Use the private reporting process outlined in the Security Policy.
+
 ## 🤝 How to Contribute
 
 We welcome contributions in various forms:
