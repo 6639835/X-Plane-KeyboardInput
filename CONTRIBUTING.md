@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to the ZIBO Keyboard Input Plugin! This document provides guidelines and information for contributors.
 
+## 📋 Code of Conduct
+
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior through the channels outlined in the Code of Conduct.
+
 ## 🤝 How to Contribute
 
 We welcome contributions in various forms:

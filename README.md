@@ -222,6 +222,8 @@ We welcome contributions from the community! Please see our [Contributing Guidel
 
 For questions or discussions, please create an issue or use GitHub Discussions.
 
+**Code of Conduct:** This project follows our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a welcoming environment for all contributors.
+
 ## 🔧 Technical Overview
 
 This plugin operates by:
