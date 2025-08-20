@@ -206,10 +206,21 @@ The plugin supports the following architectures:
 
 ## 🤝 Contributing
 
-Issues and Pull Requests are welcome!
+We welcome contributions from the community! Please see our [Contributing Guidelines](CONTRIBUTING.md) for detailed information on:
 
+- Setting up the development environment
+- Code style and standards
+- Submitting bug reports and feature requests
+- Pull request process and testing requirements
+- Platform-specific development considerations
+
+**Quick Start for Contributors:**
 1. Fork this repository
-2. Open Pull Request
+2. Follow the setup instructions in [CONTRIBUTING.md](CONTRIBUTING.md)
+3. Make your changes and test thoroughly
+4. Submit a pull request with a clear description
+
+For questions or discussions, please create an issue or use GitHub Discussions.
 
 ## 🔧 Technical Overview
 
