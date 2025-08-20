@@ -1,19 +1,36 @@
 # ZIBO Keyboard Input Plugin
 
+[![Version](https://img.shields.io/badge/version-1.0.7-brightgreen.svg)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-X--Plane%2011%2B-orange.svg)](https://www.x-plane.com/)
 [![macOS](https://img.shields.io/badge/macOS-10.15%2B-green.svg)](https://www.apple.com/macos/)
 
-A native C++ X-Plane plugin that enables direct keyboard input for the ZIBO 737 Flight Management Computer (FMC), providing seamless keyboard-to-FMC interaction with visual feedback and dual FMC support.
+**ZIBOKeyboardInput** is a high-performance native C++ X-Plane plugin that revolutionizes flight management computer interaction for the popular ZIBO 737 aircraft. This plugin eliminates the tedious point-and-click FMC operation by enabling direct keyboard input, allowing pilots to type flight plans, waypoints, and navigation data directly into the FMC using their physical keyboard.
+
+The plugin features intelligent aircraft detection, dual FMC support for both pilot positions, real-time visual feedback, and seamless integration with X-Plane's command system. Built from the ground up in C++ for optimal performance and stability, it provides a more realistic and efficient flight simulation experience.
 
 ## ✨ Features
 
 - ⌨️ **Direct Keyboard Input**: Type directly into ZIBO 737 FMC using your keyboard
 - 👨‍✈️ **Dual FMC Support**: Switch between Captain and First Officer FMC positions
 - 🎯 **Visual Indicators**: Real-time display showing active FMC position and status
-- 🚁 **Aircraft Detection**: Automatically enables only when ZIBO 737 is loaded
+- 🔍 **Aircraft Auto-Detection**: Automatically activates only when ZIBO 737 (ICAO: B738) is loaded
 - 🔧 **Custom Commands**: X-Plane commands for easy key binding and joystick integration
 - 🚀 **Native Performance**: C++ implementation for optimal performance and stability
+- 🎛️ **Intelligent Key Mapping**: Advanced key mapping with special character support (plus signs, minus signs, etc.)
+- 💾 **Cross-Platform**: Universal support for macOS (Intel + Apple Silicon), Windows, and Linux
+
+## 🎯 How It Works
+
+The plugin seamlessly integrates with X-Plane's input system to provide natural keyboard-to-FMC interaction:
+
+1. **Auto-Detection**: When you load the ZIBO 737, the plugin automatically detects the aircraft and becomes available
+2. **Toggle Activation**: Use custom keyboard shortcuts to toggle input for Captain or First Officer FMC
+3. **Direct Input**: Once enabled, simply type on your keyboard - letters, numbers, and symbols appear directly in the FMC
+4. **Visual Feedback**: A small status indicator shows which FMC position is active
+5. **Smart Filtering**: The plugin only captures relevant keys, allowing normal X-Plane shortcuts to work unchanged
+
+This eliminates the need for tedious mouse clicking on FMC buttons, making flight planning faster and more realistic.
 
 ## 🛠️ System Requirements
 
@@ -77,9 +94,13 @@ When keyboard input is enabled, the following keys are mapped to FMC buttons:
 | Backspace | CLR | Clear last character |
 | Space | SP | Space character |
 | Delete | DEL | Delete function |
-| / | Slash | Forward slash |
+| / (main or numpad) | Slash | Forward slash |
 | . | Period | Decimal point |
-| - | Minus | Minus sign |
+| - (main or numpad) | Minus | Minus sign |
+| Shift + = | Plus* | Plus sign (special handling) |
+| Numpad + | Plus* | Plus sign (special handling) |
+
+*_Note: Plus signs use a special double-minus technique to work with ZIBO FMC's internal logic_
 
 ### Custom Commands
 
@@ -91,8 +112,9 @@ The plugin provides two X-Plane commands that you can bind to keyboard shortcuts
 ### Visual Indicators
 
 When keyboard input is active, you will see:
-- **Top-left corner**: Red text showing which FMC is active ("CAP Keyboard Input Enabled" or "FO Keyboard Input Enabled")
-- **Near cursor**: Small indicator showing "CAP" or "FO" following your mouse
+- **Bottom-right corner**: Floating status window with green "KB:CAP" or "KB:FO" indicator
+- **Real-time feedback**: The indicator appears only when input is enabled and automatically hides when disabled
+- **Aircraft-specific**: Only displays when ZIBO 737 is loaded and plugin is active
 
 ### Usage Instructions
 
@@ -187,19 +209,30 @@ The plugin supports the following architectures:
 Issues and Pull Requests are welcome!
 
 1. Fork this repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
+2. Open Pull Request
+
+## 🔧 Technical Overview
+
+This plugin operates by:
+1. **Aircraft Detection**: Monitors the `sim/aircraft/view/acf_ICAO` dataref to detect ZIBO 737 (B738)
+2. **Key Interception**: Registers a key sniffer callback to capture keyboard input
+3. **Command Translation**: Maps virtual key codes to ZIBO FMC button commands (`laminar/B738/button/fmc1_*` or `laminar/B738/button/fmc2_*`)
+4. **Visual Feedback**: Creates floating status windows showing active FMC position
+5. **Smart Filtering**: Ignores modifier key combinations to prevent interference with X-Plane shortcuts
+
+### Special Character Handling
+- **Plus Signs**: Uses a sophisticated double-minus technique since ZIBO FMC toggles between minus and plus on repeated presses
+- **Dual Input Support**: Both main keyboard and numpad keys are supported for maximum compatibility
+- **Modifier Key Safety**: Prevents accidental FMC input when using keyboard shortcuts
 
 ## 📝 Changelog
 
-### v2.0.0 (C++ Plugin)
-- ✨ Complete rewrite as native C++ X-Plane plugin
-- 🚀 Improved performance and stability
-- 🎯 Enhanced visual feedback system
-- 🔧 Better integration with X-Plane plugin system
-- 📱 Universal binary support for all Mac architectures
+### v1.0.7 (Current)
+- 🚀 Stable C++ implementation with enhanced reliability
+- 🎯 Advanced visual feedback system with floating status indicators
+- 🔧 Comprehensive cross-platform support (macOS Universal, Windows x64, Linux x64)
+- 🎛️ Intelligent key mapping with special character support
+- 📱 Modern X-Plane SDK integration (XPLM 300+)
 
 ### v1.0.0 (Original Lua)
 - 🎮 Initial Lua script implementation
@@ -212,7 +245,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Original Lua Script**: Justin
 - **ZIBO 737**: Outstanding work by the Zibo aircraft development team
 - **X-Plane SDK**: Laminar Research for the comprehensive development tools
 - **Community**: All beta testers and contributors
