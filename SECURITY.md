@@ -242,8 +242,8 @@ We thank the security research community and X-Plane development community for t
 
 ---
 
-**Last Updated**: August 2024  
-**Version**: 1.1  
-**Next Review**: December 2024
+**Last Updated**: August 2025
+**Version**: 1.0
+**Author**: Justin
 
 For the most current security information, always refer to the latest version of this document in the official repository.
