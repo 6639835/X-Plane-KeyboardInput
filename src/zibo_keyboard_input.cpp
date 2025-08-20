@@ -15,6 +15,8 @@
 #endif
 #endif
 
+#define XPLM300 1  // Enable X-Plane 11+ APIs
+#define XPLM301 1  // Enable window decoration features
 #include "XPLMDefs.h"
 #include "XPLMDisplay.h"
 #include "XPLMGraphics.h"
@@ -46,19 +48,22 @@ static int g_fmc_side = 1;          // 1 = Captain, 2 = First Officer
 static XPLMDataRef g_icao_dataref = NULL;
 static XPLMCommandRef g_captain_command = NULL;
 static XPLMCommandRef g_fo_command = NULL;
+static XPLMWindowID g_status_window = NULL;
 
 // Key mapping structure - maps virtual key codes to FMC button names
 static std::map<int, const char*> g_key_mappings;
 
 // Function prototypes
 static int KeyCallback(char inChar, XPLMKeyFlags inFlags, char inVirtualKey, void* inRefcon);
-static int DrawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon);
+static void DrawStatusWindow(XPLMWindowID inWindowID, void* inRefcon);
 static int CaptainCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void* inRefcon);
 static int FOCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void* inRefcon);
 static void ToggleKeyboardInput(int side);
 static bool IsZIBO737();
 static void InitializeKeyMappings();
 static void LogMessage(const char* message);
+static void CreateStatusWindow();
+static void UpdateStatusWindow();
 
 // Initialize key mappings
 static void InitializeKeyMappings()
@@ -172,6 +177,9 @@ static void ToggleKeyboardInput(int side)
         snprintf(message, sizeof(message), "ZIBO %s FMC Keyboard Input Disabled", side_name);
         LogMessage(message);
     }
+    
+    // Update status window visibility
+    UpdateStatusWindow();
 }
 
 // Key event callback
@@ -262,34 +270,95 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
     return 1; // Let other handlers process the key
 }
 
-// Drawing callback for visual indicators
-static int DrawCallback(XPLMDrawingPhase /*inPhase*/, int /*inIsBefore*/, void* /*inRefcon*/)
+// Create status window using modern X-Plane window system
+static void CreateStatusWindow()
 {
-    // Only draw for ZIBO 737 when keyboard input is enabled
-    if (!IsZIBO737() || g_toggled == 0) {
-        return 1;
+    if (g_status_window != NULL) {
+        return; // Window already exists
     }
     
-    // Get screen dimensions
+    // Get screen dimensions for positioning
     int screenWidth, screenHeight;
     XPLMGetScreenSize(&screenWidth, &screenHeight);
     
-    // Prepare text
+    // Position window in bottom-right corner
+    int window_left = screenWidth - 100;
+    int window_top = 80;
+    int window_right = screenWidth - 10;
+    int window_bottom = 40;
+    
+    XPLMCreateWindow_t window_params;
+    memset(&window_params, 0, sizeof(window_params));
+    window_params.structSize = sizeof(window_params);
+    window_params.left = window_left;
+    window_params.top = window_top;
+    window_params.right = window_right;
+    window_params.bottom = window_bottom;
+    window_params.visible = 0;  // Initially hidden
+    window_params.drawWindowFunc = DrawStatusWindow;
+    window_params.handleMouseClickFunc = NULL;
+    window_params.handleKeyFunc = NULL;
+    window_params.handleCursorFunc = NULL;
+    window_params.handleMouseWheelFunc = NULL;
+    window_params.refcon = NULL;
+    window_params.layer = xplm_WindowLayerFloatingWindows;  // Top layer
+    window_params.decorateAsFloatingWindow = xplm_WindowDecorationNone;  // No decoration
+    window_params.handleRightClickFunc = NULL;  // No right click handling
+    
+    g_status_window = XPLMCreateWindowEx(&window_params);
+    
+    if (g_status_window != NULL) {
+        LogMessage("Status window created successfully");
+    } else {
+        LogMessage("Failed to create status window");
+    }
+}
+
+// Update status window visibility based on current state
+static void UpdateStatusWindow()
+{
+    if (g_status_window == NULL) {
+        return;
+    }
+    
+    // Show window only when keyboard input is enabled and on ZIBO 737
+    int should_show = (g_toggled == 1 && IsZIBO737()) ? 1 : 0;
+    XPLMSetWindowIsVisible(g_status_window, should_show);
+    
+    char debug_msg[256];
+    snprintf(debug_msg, sizeof(debug_msg), "Status window visibility updated: %s (toggled=%d, ZIBO=%d)", 
+             should_show ? "VISIBLE" : "HIDDEN", g_toggled, IsZIBO737() ? 1 : 0);
+    LogMessage(debug_msg);
+}
+
+// Draw status window content
+static void DrawStatusWindow(XPLMWindowID inWindowID, void* /*inRefcon*/)
+{
+    // Get window geometry
+    int left, top, right, bottom;
+    XPLMGetWindowGeometry(inWindowID, &left, &top, &right, &bottom);
+    
+    // Set up OpenGL state for 2D drawing
+    XPLMSetGraphicsState(0, 0, 0, 0, 1, 0, 0);  // Enable alpha blending
+    
+    // Draw semi-transparent background
+    XPLMDrawTranslucentDarkBox(left, top, right, bottom);
+    
+    // Prepare status text
     const char* side_text = (g_fmc_side == 1) ? "CAP" : "FO";
-    char full_text[64];
-    snprintf(full_text, sizeof(full_text), "%s FMC Keyboard Input Enabled", side_text);
+    char status_text[16];
+    snprintf(status_text, sizeof(status_text), "KB:%s", side_text);
     
-    // Set up OpenGL for 2D drawing
-    XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
-    
-    // Set color to green for better visibility and less intrusive
+    // Draw bright green status text
     float green_color[3] = {0.0f, 1.0f, 0.0f};
+    XPLMDrawString(green_color, left + 5, top - 15, status_text, NULL, xplmFont_Basic);
     
-    // Only draw status text in top-left corner, remove the mouse cursor indicator
-    // This fixes the issue where "CAP" text appears on ND and other displays
-    XPLMDrawString(green_color, 50, screenHeight - 50, full_text, NULL, xplmFont_Proportional);
-    
-    return 1;
+    // Debug logging (occasional)
+    static int draw_count = 0;
+    draw_count++;
+    if (draw_count % 180 == 1) {  // Log every 3 seconds
+        LogMessage("Status window drawing successfully");
+    }
 }
 
 // Captain command handler
@@ -324,9 +393,9 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     g_icao_dataref = XPLMFindDataRef("sim/aircraft/view/acf_ICAO");
     
     // Create custom commands
-    g_captain_command = XPLMCreateCommand("zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain", 
+    g_captain_command = XPLMCreateCommand("Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain", 
                                         "Toggle Keyboard Input (Captain)");
-    g_fo_command = XPLMCreateCommand("zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO", 
+    g_fo_command = XPLMCreateCommand("Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO", 
                                    "Toggle Keyboard Input (FO)");
     
     // Register command handlers
@@ -336,8 +405,9 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     // Register key callback
     XPLMRegisterKeySniffer(KeyCallback, 1, NULL);
     
-    // Register draw callback
-    XPLMRegisterDrawCallback(DrawCallback, xplm_Phase_Gauges, 1, NULL);
+    // Create status window using modern X-Plane window system
+    CreateStatusWindow();
+    UpdateStatusWindow();  // Set initial visibility
     
     LogMessage("Plugin initialized successfully");
     
@@ -347,9 +417,15 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 // Plugin shutdown
 PLUGIN_API void XPluginStop(void)
 {
+    // Destroy status window
+    if (g_status_window != NULL) {
+        XPLMDestroyWindow(g_status_window);
+        g_status_window = NULL;
+        LogMessage("Status window destroyed");
+    }
+    
     // Unregister callbacks
     XPLMUnregisterKeySniffer(KeyCallback, 1, NULL);
-    XPLMUnregisterDrawCallback(DrawCallback, xplm_Phase_Gauges, 1, NULL);
     
     // Unregister command handlers
     if (g_captain_command) {
@@ -366,6 +442,7 @@ PLUGIN_API void XPluginDisable(void)
 {
     // Disable keyboard input when plugin is disabled
     g_toggled = 0;
+    UpdateStatusWindow();  // Hide status window when disabled
 }
 
 PLUGIN_API int XPluginEnable(void)

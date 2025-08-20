@@ -71,8 +71,8 @@ if [ -f "$XPL_FILE" ]; then
     echo "3. Restart X-Plane"
     echo ""
     echo "Plugin Commands (bind in X-Plane settings):"
-    echo "- zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain"
-    echo "- zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO"
+    echo "- Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain"
+    echo "- Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO"
 else
     echo "[ERROR] Output file not found: $XPL_FILE"
     exit 1
