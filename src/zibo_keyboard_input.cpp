@@ -15,6 +15,7 @@
 #endif
 #endif
 
+#define XPLM200 1  // Enable X-Plane 10+ APIs (for commands)
 #define XPLM300 1  // Enable X-Plane 11+ APIs
 #define XPLM301 1  // Enable window decoration features
 #include "XPLMDefs.h"
@@ -50,6 +51,10 @@ static XPLMCommandRef g_captain_command = NULL;
 static XPLMCommandRef g_fo_command = NULL;
 static XPLMWindowID g_status_window = NULL;
 
+// +/- button state tracking: 1 = showing +, -1 = showing -, 0 = unknown
+static int g_captain_plusminus_state = 1;   // Captain FMC +/- button state  
+static int g_fo_plusminus_state = 1;        // FO FMC +/- button state
+
 // Key mapping structure - maps virtual key codes to FMC button names
 static std::map<int, const char*> g_key_mappings;
 
@@ -64,6 +69,8 @@ static void InitializeKeyMappings();
 static void LogMessage(const char* message);
 static void CreateStatusWindow();
 static void UpdateStatusWindow();
+static int* GetPlusMinusStatePtr(int side);
+static void HandlePlusMinusKey(int desired_state);
 
 // Initialize key mappings
 static void InitializeKeyMappings()
@@ -115,17 +122,12 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash - main keyboard (0xB8)
     g_key_mappings[XPLM_VK_DIVIDE] = "slash";      // Forward slash - numpad (0x6F)
     g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point (0xB9)
-    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign - main keyboard (0xB1)
-    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Minus sign - numpad (0x6D)
-    g_key_mappings[XPLM_VK_ADD] = "plus_special";  // Plus sign - numpad (0x6B) - special handling
-    // Note: XPLM_VK_EQUAL (0xB0) is handled specially in KeyCallback for Shift+Equal = Plus
+    g_key_mappings[XPLM_VK_MINUS] = "minus";       // Minus sign - main keyboard (0xB1) -> minus button
+    g_key_mappings[XPLM_VK_SUBTRACT] = "minus";    // Minus sign - numpad (0x6D) -> minus button  
+    g_key_mappings[XPLM_VK_ADD] = "plus_key";      // Plus sign - numpad (0x6B) -> smart plus handling
+    // Note: XPLM_VK_EQUAL (0xB0) with Shift is handled specially in KeyCallback for Plus -> smart plus handling
     
-    // Debug: Log the critical key mappings
-    LogMessage("Key mappings initialized:");
-    char mapping_info[256];
-    snprintf(mapping_info, sizeof(mapping_info), "  MINUS(0xB1)→%s, SUBTRACT(0x6D)→%s, ADD(0x6B)→%s, EQUAL(0xB0)→double_minus", 
-             g_key_mappings[XPLM_VK_MINUS], g_key_mappings[XPLM_VK_SUBTRACT], g_key_mappings[XPLM_VK_ADD]);
-    LogMessage(mapping_info);
+
 }
 
 // Check if current aircraft is ZIBO 737
@@ -166,9 +168,18 @@ static void ToggleKeyboardInput(int side)
     if (g_toggled == 0) {
         g_toggled = 1;
         g_fmc_side = side;
+        
+        // Reset +/- state to default (assume showing +) when enabling keyboard input
+        // since we don't know the actual state of the FMC +/- button
+        if (side == 1) {
+            g_captain_plusminus_state = 1; // Assume showing +
+        } else {
+            g_fo_plusminus_state = 1; // Assume showing +
+        }
+        
         const char* side_name = (side == 1) ? "Captain" : "First Officer";
         char message[256];
-        snprintf(message, sizeof(message), "ZIBO %s FMC Keyboard Input Enabled", side_name);
+        snprintf(message, sizeof(message), "ZIBO %s FMC Keyboard Input Enabled (minus button state reset to +)", side_name);
         LogMessage(message);
     } else {
         g_toggled = 0;
@@ -190,81 +201,54 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
         return 1; // Let other handlers process the key
     }
     
-    // Fix for signed char issue - convert to unsigned char for proper key lookup first
+    // Convert to unsigned for proper key lookup
     unsigned char virtualKey = (unsigned char)inVirtualKey;
     
     // Check if any modifier keys are pressed - but allow Shift+Equal for plus sign
     // This fixes the issue where combo keys (like CTRL+SHIFT+I) still input letters to FMC
-    // Use unsigned comparison to fix the signed char issue
     bool hasShiftEqual = (inFlags & xplm_ShiftFlag) && (virtualKey == XPLM_VK_EQUAL);
     if ((inFlags & (xplm_ShiftFlag | xplm_OptionAltFlag | xplm_ControlFlag)) && !hasShiftEqual) {
         return 1; // Let other handlers (like key commands) process modifier key combinations
     }
     
-    // Special handling for Shift+Equal = Plus
-    // Since ZIBO FMC doesn't have a direct "plus" command, we use the minus key twice
-    // because ZIBO has internal logic: first minus = "-", second minus = "+"
+    // Determine the desired state and button name
     const char* button_name = nullptr;
-    bool needsDoubleMinus = false;
+    int desired_plusminus_state = 0; // 1 = want +, -1 = want -, 0 = not a +/- key
     
     if (hasShiftEqual) {
-        button_name = "minus";  // Use minus key for plus (will be pressed twice)
-        needsDoubleMinus = true;  // Flag to press minus twice for plus
+        // Shift+Equal = Plus
+        button_name = "plus_key";
+        desired_plusminus_state = 1; // Want plus sign
     } else {
-        auto it = g_key_mappings.find(virtualKey);  // Use unsigned virtual key
+        auto it = g_key_mappings.find(virtualKey);
         if (it != g_key_mappings.end()) {
-            if (strcmp(it->second, "plus_special") == 0) {
-                // Numpad plus key also uses double minus technique
-                button_name = "minus";
-                needsDoubleMinus = true;
-            } else {
-                button_name = it->second;
+            button_name = it->second;
+            if (strcmp(button_name, "minus") == 0) {
+                // Minus key -> want minus sign
+                desired_plusminus_state = -1;
+            } else if (strcmp(button_name, "plus_key") == 0) {
+                // Plus key -> want plus sign  
+                desired_plusminus_state = 1;
             }
         }
     }
     
     if (button_name != nullptr) {
-        // Build command string
-        char command_string[256];
-        snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
-        
-        // Debug logging with more detail
-        char debug_msg[512];
-        if (needsDoubleMinus) {
-            const char* plus_source = hasShiftEqual ? "Shift+Equal" : "Numpad Plus";
-            snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s x2 (VK: 0x%02X, Flags: 0x%02X) [%s -> Double Minus for Plus]", 
-                    command_string, virtualKey, inFlags, plus_source);
-        } else {
-            snprintf(debug_msg, sizeof(debug_msg), "Attempting FMC command: %s (VK: 0x%02X, Flags: 0x%02X) [Normal key: %s]", 
-                    command_string, virtualKey, inFlags, button_name);
-        }
-        LogMessage(debug_msg);
-        
-        // Execute the command
-        XPLMCommandRef command = XPLMFindCommand(command_string);
-        if (command != NULL) {
-            XPLMCommandOnce(command);
-            
-            // For plus sign (Shift+Equal), execute minus command twice
-            // because ZIBO FMC toggles between minus and plus on repeated presses
-            if (needsDoubleMinus) {
-                // Small delay between commands to ensure proper processing
-                // Note: This is a simple approach, could be improved with a timer
-                XPLMCommandOnce(command);  // Execute minus a second time to get plus
-                LogMessage("Double minus command executed for plus sign");
-            } else {
-                LogMessage("Command executed successfully");
-            }
+        // Handle +/- keys with intelligent state management
+        if (desired_plusminus_state != 0) {
+            HandlePlusMinusKey(desired_plusminus_state);
             return 0; // Consume the key event
         } else {
-            char error_msg[256];
-            snprintf(error_msg, sizeof(error_msg), "Command not found: %s", command_string);
-            LogMessage(error_msg);
+            // Handle normal keys (non +/- keys)
+            char command_string[256];
+            snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
+            
+            XPLMCommandRef command = XPLMFindCommand(command_string);
+            if (command != NULL) {
+                XPLMCommandOnce(command);
+                return 0; // Consume the key event
+            }
         }
-    } else {
-        char debug_msg[256];
-        snprintf(debug_msg, sizeof(debug_msg), "No mapping found for VK: 0x%02X (signed: %d)", virtualKey, inVirtualKey);
-        LogMessage(debug_msg);
     }
     
     return 1; // Let other handlers process the key
@@ -324,11 +308,6 @@ static void UpdateStatusWindow()
     // Show window only when keyboard input is enabled and on ZIBO 737
     int should_show = (g_toggled == 1 && IsZIBO737()) ? 1 : 0;
     XPLMSetWindowIsVisible(g_status_window, should_show);
-    
-    char debug_msg[256];
-    snprintf(debug_msg, sizeof(debug_msg), "Status window visibility updated: %s (toggled=%d, ZIBO=%d)", 
-             should_show ? "VISIBLE" : "HIDDEN", g_toggled, IsZIBO737() ? 1 : 0);
-    LogMessage(debug_msg);
 }
 
 // Draw status window content
@@ -352,12 +331,32 @@ static void DrawStatusWindow(XPLMWindowID inWindowID, void* /*inRefcon*/)
     // Draw bright green status text
     float green_color[3] = {0.0f, 1.0f, 0.0f};
     XPLMDrawString(green_color, left + 5, top - 15, status_text, NULL, xplmFont_Basic);
+}
+
+// Get pointer to the correct +/- state variable based on FMC side
+static int* GetPlusMinusStatePtr(int side)
+{
+    return (side == 1) ? &g_captain_plusminus_state : &g_fo_plusminus_state;
+}
+
+// Handle +/- key press with intelligent state management using ZIBO's minus command
+static void HandlePlusMinusKey(int desired_state)
+{
+    int* current_state = GetPlusMinusStatePtr(g_fmc_side);
     
-    // Debug logging (occasional)
-    static int draw_count = 0;
-    draw_count++;
-    if (draw_count % 180 == 1) {  // Log every 3 seconds
-        LogMessage("Status window drawing successfully");
+    // If we already have the desired state, do nothing
+    if (*current_state == desired_state) {
+        return;
+    }
+    
+    // Press the minus button once to toggle state (ZIBO logic: minus toggles between - and +)
+    char command_string[256];
+    snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_minus", g_fmc_side);
+    
+    XPLMCommandRef command = XPLMFindCommand(command_string);
+    if (command != NULL) {
+        XPLMCommandOnce(command);
+        *current_state = desired_state;  // Update our state tracking
     }
 }
 

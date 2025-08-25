@@ -188,8 +188,8 @@ jobs:
           * zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO
         - Toggle keyboard input on/off as needed
         
-        Build: \$(date '+%Y-%m-%d %H:%M:%S') UTC
-        Commit: \${{ github.sha }}
+        Build: $(date '+%Y-%m-%d %H:%M:%S') UTC
+        Commit: ${{ github.sha }}
         EOF
         
         cd release
