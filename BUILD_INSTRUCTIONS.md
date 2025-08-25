@@ -1,6 +1,17 @@
-# ZIBO Keyboard Input Plugin - Build Instructions
+# Universal FMC Keyboard Input Plugin - Build Instructions
 
-This document provides detailed instructions for building the ZIBO Keyboard Input plugin from source code.
+This document provides detailed instructions for building the Universal FMC Keyboard Input plugin from source code. This plugin supports multiple aircraft types including ZIBO 737, Default 737/A330, and SR22.
+
+## 🛩️ Multi-Aircraft Support
+
+**Version 2.0.0 Major Update**: The plugin now supports multiple aircraft types with automatic detection and adaptation:
+
+- **ZIBO 737** (ICAO: B738) - Full dual FMC support with intelligent +/- state management
+- **Default Boeing 737** (ICAO: B738) - Dual FMS support (FMS/FMS2 systems)  
+- **Default Airbus A330** (ICAO: A330) - Complete dual FMS integration
+- **Default Cirrus SR22** (ICAO: SR22) - GPS GCU keyboard input support
+
+The build process creates a single universal plugin that automatically detects and adapts to each aircraft type at runtime.
 
 ## Prerequisites
 
@@ -256,8 +267,8 @@ To verify your build:
 To debug the plugin:
 1. Build with Debug configuration
 2. Launch X-Plane with debugger attached
-3. Load ZIBO 737 aircraft
-4. Enable plugin functionality
+3. Load any supported aircraft (ZIBO 737, Default 737/A330, or SR22)
+4. Enable plugin functionality and test multi-aircraft detection
 
 ## Contributing to Build System
 

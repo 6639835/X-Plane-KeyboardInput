@@ -8,7 +8,7 @@ set -e  # Exit on error
 PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR="$PROJECT_DIR/build"
 
-echo "=== X-Plane ZIBO Keyboard Input Plugin Build Script ==="
+echo "=== X-Plane Universal FMC Keyboard Input Plugin Build Script ==="
 echo "Project Directory: $PROJECT_DIR"
 echo "Build Directory: $BUILD_DIR"
 
@@ -71,8 +71,8 @@ if [ -f "$XPL_FILE" ]; then
     echo "3. Restart X-Plane"
     echo ""
     echo "Plugin Commands (bind in X-Plane settings):"
-    echo "- Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain"
-    echo "- Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO"
+    echo "- Zibo/Universal_FMC_Keyboard_Input/Toggle_Keyboard_Input_Captain"
+    echo "- Zibo/Universal_FMC_Keyboard_Input/Toggle_Keyboard_Input_FO"
 else
     echo "[ERROR] Output file not found: $XPL_FILE"
     exit 1

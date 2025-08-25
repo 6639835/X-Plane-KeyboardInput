@@ -6,7 +6,7 @@
 PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
 PLUGIN_NAME="ZIBOKeyboardInput"
 
-echo "=== X-Plane ZIBO Keyboard Input Plugin Installation Script ==="
+echo "=== X-Plane Universal FMC Keyboard Input Plugin Installation Script ==="
 
 # Check if plugin exists
 XPL_FILE="$PROJECT_DIR/build/mac.xpl"
@@ -65,8 +65,8 @@ if [ -f "$PLUGIN_DIR/mac.xpl" ]; then
     echo "To use the plugin:"
     echo "1. Load the ZIBO 737 aircraft"
     echo "2. Go to Settings > Keyboard to assign keys to these commands:"
-    echo "   - Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain"
-    echo "   - Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO"
+    echo "   - Zibo/Universal_FMC_Keyboard_Input/Toggle_Keyboard_Input_Captain"
+    echo "   - Zibo/Universal_FMC_Keyboard_Input/Toggle_Keyboard_Input_FO"
     echo "3. Toggle the keyboard input on/off as needed"
 else
     echo "[ERROR] Failed to install plugin"

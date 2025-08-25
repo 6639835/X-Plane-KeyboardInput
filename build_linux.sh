@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ZIBO Keyboard Input Plugin Build Script (Linux)
+# Universal FMC Keyboard Input Plugin Build Script (Linux)
 # Usage: ./build_linux.sh [clean]
 
 set -e  # Exit on error
@@ -8,7 +8,7 @@ set -e  # Exit on error
 PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR="$PROJECT_DIR/build"
 
-echo "=== ZIBO Keyboard Input Plugin Build Script (Linux) ==="
+echo "=== Universal FMC Keyboard Input Plugin Build Script (Linux) ==="
 echo "Project Directory: $PROJECT_DIR"
 echo "Build Directory: $BUILD_DIR"
 

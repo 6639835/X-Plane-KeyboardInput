@@ -1,6 +1,6 @@
-# Contributing to ZIBO Keyboard Input Plugin
+# Contributing to Universal FMC Keyboard Input Plugin
 
-Thank you for your interest in contributing to the ZIBO Keyboard Input Plugin! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to the Universal FMC Keyboard Input Plugin! This document provides guidelines and information for contributors working on this multi-aircraft keyboard input system.
 
 ## 📋 Code of Conduct
 

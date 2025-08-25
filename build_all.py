@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-ZIBO Keyboard Input Plugin Cross-Platform Build Script
+Universal FMC Keyboard Input Plugin Cross-Platform Build Script
 Supports automatic detection and building for Windows, macOS, and Linux platforms
+Multi-aircraft support: ZIBO 737, Default 737/A330, SR22
 
 Usage:
     python build_all.py           # Build current platform
@@ -123,7 +124,7 @@ Examples:
     else:
         target_platform = args.platform
     
-    print(f"=== ZIBO Keyboard Input Plugin Build Script ===")
+    print(f"=== Universal FMC Keyboard Input Plugin Build Script ===")
     print(f"Target platform: {target_platform}")
     print(f"Operation type: {args.action}")
     print()

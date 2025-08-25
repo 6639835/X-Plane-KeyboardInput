@@ -39,9 +39,9 @@
 #endif
 
 // Plugin information
-#define PLUGIN_NAME "ZIBO Keyboard Input"
-#define PLUGIN_SIG "justin.zibo.keyboard"
-#define PLUGIN_DESC "Keyboard input handler for ZIBO 737 FMC"
+#define PLUGIN_NAME "Universal FMC Keyboard Input"
+#define PLUGIN_SIG "justin.universal.fmc.keyboard"
+#define PLUGIN_DESC "Universal keyboard input handler for multiple aircraft FMC systems"
 
 // Global state variables
 static int g_toggled = 0;           // 0 = disabled, 1 = enabled
@@ -55,6 +55,89 @@ static XPLMWindowID g_status_window = NULL;
 static int g_captain_plusminus_state = 1;   // Captain FMC +/- button state  
 static int g_fo_plusminus_state = 1;        // FO FMC +/- button state
 
+// Aircraft configuration structure
+enum AircraftType {
+    AIRCRAFT_UNKNOWN = 0,
+    AIRCRAFT_ZIBO_737,
+    AIRCRAFT_DEFAULT_737,
+    AIRCRAFT_DEFAULT_A330,
+    AIRCRAFT_DEFAULT_SR22
+};
+
+struct AircraftConfig {
+    AircraftType type;
+    const char* name;
+    const char* icao;
+    const char* command_format;      // Command format with %s for key name (single FMC)
+    const char* command_format_side; // For aircraft with side-specific commands (like ZIBO)
+    const char* command_format_capt; // Captain FMC command format (for FMS/FMS2 style)
+    const char* command_format_fo;   // First Officer FMC command format (for FMS/FMS2 style)
+    const char* minus_command;       // Specific minus command for +/- toggle
+    const char* minus_command_capt;  // Captain minus command (for FMS/FMS2 style)
+    const char* minus_command_fo;    // First Officer minus command (for FMS/FMS2 style)
+    bool has_side_specific_fmc;      // Whether aircraft has separate Capt/FO FMCs
+};
+
+// Supported aircraft configurations
+static const AircraftConfig g_aircraft_configs[] = {
+    {
+        AIRCRAFT_ZIBO_737,
+        "ZIBO 737",
+        "B738",
+        nullptr,                           // Uses side-specific format
+        "laminar/B738/button/fmc%d_%s",   // Format with FMC side
+        nullptr,                           // No separate capt format
+        nullptr,                           // No separate fo format
+        "laminar/B738/button/fmc%d_minus", // Minus command format
+        nullptr,                           // No separate capt minus
+        nullptr,                           // No separate fo minus
+        true                               // Has side-specific FMCs
+    },
+    {
+        AIRCRAFT_DEFAULT_737,
+        "Default 737",
+        "B738",
+        nullptr,                           // Uses capt/fo specific formats
+        nullptr,                           // No side-specific format
+        "sim/FMS/key_%s",                  // Captain FMS commands
+        "sim/FMS2/key_%s",                 // First Officer FMS commands
+        nullptr,                           // No single minus command
+        "sim/FMS/key_minus",              // Captain minus command
+        "sim/FMS2/key_minus",             // First Officer minus command
+        true                               // Has side-specific FMCs
+    },
+    {
+        AIRCRAFT_DEFAULT_A330,
+        "Default A330",
+        "A330",
+        nullptr,                           // Uses capt/fo specific formats
+        nullptr,                           // No side-specific format
+        "sim/FMS/key_%s",                  // Captain FMS commands
+        "sim/FMS2/key_%s",                 // First Officer FMS commands
+        nullptr,                           // No single minus command
+        "sim/FMS/key_minus",              // Captain minus command
+        "sim/FMS2/key_minus",             // First Officer minus command
+        true                               // Has side-specific FMCs
+    },
+    {
+        AIRCRAFT_DEFAULT_SR22,
+        "Default SR22",
+        "SR22",
+        "sim/GPS/gcu478/%s",              // GPS GCU commands
+        nullptr,                           // No side-specific format
+        nullptr,                           // No capt format
+        nullptr,                           // No fo format
+        nullptr,                           // No plus/minus functionality
+        nullptr,                           // No capt minus
+        nullptr,                           // No fo minus
+        false                             // Single GPS system
+    }
+};
+
+// Current aircraft detection
+static AircraftType g_current_aircraft = AIRCRAFT_UNKNOWN;
+static const AircraftConfig* g_current_config = nullptr;
+
 // Key mapping structure - maps virtual key codes to FMC button names
 static std::map<int, const char*> g_key_mappings;
 
@@ -64,8 +147,11 @@ static void DrawStatusWindow(XPLMWindowID inWindowID, void* inRefcon);
 static int CaptainCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void* inRefcon);
 static int FOCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void* inRefcon);
 static void ToggleKeyboardInput(int side);
-static bool IsZIBO737();
+static AircraftType DetectAircraft();
+static const AircraftConfig* GetAircraftConfig(AircraftType type);
+static bool IsSupportedAircraft();
 static void InitializeKeyMappings();
+static const char* ConvertKeyName(const char* zibo_key_name);
 static void LogMessage(const char* message);
 static void CreateStatusWindow();
 static void UpdateStatusWindow();
@@ -119,6 +205,8 @@ static void InitializeKeyMappings()
     g_key_mappings[XPLM_VK_BACK] = "clr";          // Backspace -> Clear
     g_key_mappings[XPLM_VK_SPACE] = "SP";          // Space -> SP
     g_key_mappings[XPLM_VK_DELETE] = "del";        // Delete -> Delete
+    g_key_mappings[XPLM_VK_RETURN] = "ent";        // Enter/Return -> Enter
+    g_key_mappings[XPLM_VK_ENTER] = "ent";         // Numpad Enter -> Enter
     g_key_mappings[XPLM_VK_SLASH] = "slash";       // Forward slash - main keyboard (0xB8)
     g_key_mappings[XPLM_VK_DIVIDE] = "slash";      // Forward slash - numpad (0x6F)
     g_key_mappings[XPLM_VK_PERIOD] = "period";     // Period/decimal point (0xB9)
@@ -130,23 +218,125 @@ static void InitializeKeyMappings()
 
 }
 
-// Check if current aircraft is ZIBO 737
-static bool IsZIBO737()
+// Convert key name based on aircraft type (ZIBO format -> aircraft-specific format)
+static const char* ConvertKeyName(const char* zibo_key_name)
 {
-    if (g_icao_dataref == NULL) return false;
+    if (!g_current_config) return zibo_key_name;
+    
+    // ZIBO aircraft uses original key names
+    if (g_current_aircraft == AIRCRAFT_ZIBO_737) {
+        return zibo_key_name;
+    }
+    
+    // Default aircraft (737/A330) use different key names
+    if (g_current_aircraft == AIRCRAFT_DEFAULT_737 || g_current_aircraft == AIRCRAFT_DEFAULT_A330) {
+        // Convert special keys
+        if (strcmp(zibo_key_name, "clr") == 0) return "clear";
+        if (strcmp(zibo_key_name, "SP") == 0) return "space";
+        if (strcmp(zibo_key_name, "del") == 0) return "delete";
+        if (strcmp(zibo_key_name, "ent") == 0) return "enter";
+        if (strcmp(zibo_key_name, "slash") == 0) return "slash";
+        if (strcmp(zibo_key_name, "period") == 0) return "period";
+        if (strcmp(zibo_key_name, "minus") == 0) return "minus";
+        
+        // Convert letters to lowercase (default aircraft uses lowercase)
+        static char lowercase_buffer[8];
+        if (strlen(zibo_key_name) == 1 && zibo_key_name[0] >= 'A' && zibo_key_name[0] <= 'Z') {
+            lowercase_buffer[0] = zibo_key_name[0] - 'A' + 'a';
+            lowercase_buffer[1] = '\0';
+            return lowercase_buffer;
+        }
+        
+        // Numbers and other keys remain the same
+        return zibo_key_name;
+    }
+    
+    // SR22 uses GPS GCU commands with specific naming
+    if (g_current_aircraft == AIRCRAFT_DEFAULT_SR22) {
+        // Convert special keys for SR22 GPS
+        if (strcmp(zibo_key_name, "clr") == 0) return "clr";          // Clear
+        if (strcmp(zibo_key_name, "SP") == 0) return "spc";           // Space  
+        if (strcmp(zibo_key_name, "del") == 0) return "bksp";         // Backspace
+        if (strcmp(zibo_key_name, "ent") == 0) return "ent";          // Enter
+        if (strcmp(zibo_key_name, "period") == 0) return "dot";       // Period
+        // Note: SR22 has no slash or minus functionality
+        if (strcmp(zibo_key_name, "slash") == 0) return nullptr;      // No slash support
+        if (strcmp(zibo_key_name, "minus") == 0) return nullptr;      // No minus support
+        
+        // Convert letters to uppercase (SR22 GPS uses uppercase)
+        static char uppercase_buffer[8];
+        if (strlen(zibo_key_name) == 1 && zibo_key_name[0] >= 'A' && zibo_key_name[0] <= 'Z') {
+            uppercase_buffer[0] = zibo_key_name[0]; // Already uppercase
+            uppercase_buffer[1] = '\0';
+            return uppercase_buffer;
+        }
+        
+        // Numbers remain the same
+        return zibo_key_name;
+    }
+    
+    return zibo_key_name; // Fallback
+}
+
+// Detect current aircraft type based on ICAO and specific characteristics
+static AircraftType DetectAircraft()
+{
+    if (g_icao_dataref == NULL) return AIRCRAFT_UNKNOWN;
     
     char icao[40];
     XPLMGetDatab(g_icao_dataref, icao, 0, sizeof(icao) - 1);
     icao[sizeof(icao) - 1] = '\0';
     
-    return (strcmp(icao, "B738") == 0);
+    // Check for ZIBO 737 first (has specific ZIBO commands)
+    if (strcmp(icao, "B738") == 0) {
+        // Test if ZIBO-specific command exists to distinguish from default 737
+        XPLMCommandRef zibo_test = XPLMFindCommand("laminar/B738/button/fmc1_0");
+        if (zibo_test != NULL) {
+            return AIRCRAFT_ZIBO_737;
+        } else {
+            return AIRCRAFT_DEFAULT_737;
+        }
+    }
+    
+    // Check for A330
+    if (strcmp(icao, "A330") == 0) {
+        return AIRCRAFT_DEFAULT_A330;
+    }
+    
+    // Check for SR22
+    if (strcmp(icao, "SR22") == 0) {
+        return AIRCRAFT_DEFAULT_SR22;
+    }
+    
+    return AIRCRAFT_UNKNOWN;
+}
+
+// Get aircraft configuration for given type
+static const AircraftConfig* GetAircraftConfig(AircraftType type)
+{
+    for (size_t i = 0; i < sizeof(g_aircraft_configs) / sizeof(g_aircraft_configs[0]); i++) {
+        if (g_aircraft_configs[i].type == type) {
+            return &g_aircraft_configs[i];
+        }
+    }
+    return nullptr;
+}
+
+// Check if current aircraft is supported
+static bool IsSupportedAircraft()
+{
+    // Update aircraft detection
+    g_current_aircraft = DetectAircraft();
+    g_current_config = GetAircraftConfig(g_current_aircraft);
+    
+    return (g_current_config != nullptr);
 }
 
 // Log message to X-Plane log
 static void LogMessage(const char* message)
 {
     char full_message[512];
-    snprintf(full_message, sizeof(full_message), "ZIBO Keyboard Input: %s\n", message);
+    snprintf(full_message, sizeof(full_message), "Universal FMC Keyboard: %s\n", message);
     XPLMDebugString(full_message);
 }
 
@@ -159,19 +349,25 @@ static void ToggleKeyboardInput(int side)
         return;
     }
     
-    // Only work with ZIBO 737
-    if (!IsZIBO737()) {
-        LogMessage("Not compatible with current aircraft");
+    // Only work with supported aircraft
+    if (!IsSupportedAircraft()) {
+        LogMessage("Current aircraft is not supported");
         return;
     }
     
     if (g_toggled == 0) {
         g_toggled = 1;
-        g_fmc_side = side;
+        
+        // For aircraft without side-specific FMCs, always use side 1 (single FMC)
+        if (!g_current_config->has_side_specific_fmc) {
+            g_fmc_side = 1;
+        } else {
+            g_fmc_side = side;
+        }
         
         // Reset +/- state to default (assume showing +) when enabling keyboard input
         // since we don't know the actual state of the FMC +/- button
-        if (side == 1) {
+        if (g_fmc_side == 1) {
             g_captain_plusminus_state = 1; // Assume showing +
         } else {
             g_fo_plusminus_state = 1; // Assume showing +
@@ -179,13 +375,31 @@ static void ToggleKeyboardInput(int side)
         
         const char* side_name = (side == 1) ? "Captain" : "First Officer";
         char message[256];
-        snprintf(message, sizeof(message), "ZIBO %s FMC Keyboard Input Enabled (minus button state reset to +)", side_name);
+        
+        // Handle aircraft with or without side-specific FMCs
+        if (g_current_config->has_side_specific_fmc) {
+            snprintf(message, sizeof(message), "%s %s FMC Keyboard Input Enabled", 
+                    g_current_config->name, side_name);
+        } else {
+            snprintf(message, sizeof(message), "%s FMC Keyboard Input Enabled", 
+                    g_current_config->name);
+        }
         LogMessage(message);
     } else {
         g_toggled = 0;
-        const char* side_name = (g_fmc_side == 1) ? "Captain" : "First Officer";
         char message[256];
-        snprintf(message, sizeof(message), "ZIBO %s FMC Keyboard Input Disabled", side_name);
+        
+        // Handle aircraft with or without side-specific FMCs
+        if (g_current_config && g_current_config->has_side_specific_fmc) {
+            const char* side_name = (g_fmc_side == 1) ? "Captain" : "First Officer";
+            snprintf(message, sizeof(message), "%s %s FMC Keyboard Input Disabled", 
+                    g_current_config->name, side_name);
+        } else if (g_current_config) {
+            snprintf(message, sizeof(message), "%s FMC Keyboard Input Disabled", 
+                    g_current_config->name);
+        } else {
+            snprintf(message, sizeof(message), "FMC Keyboard Input Disabled");
+        }
         LogMessage(message);
     }
     
@@ -196,8 +410,8 @@ static void ToggleKeyboardInput(int side)
 // Key event callback
 static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey, void* /*inRefcon*/)
 {
-    // Only process key presses when enabled, on ZIBO 737, and for valid key mappings
-    if (!(inFlags & xplm_DownFlag) || g_toggled == 0 || !IsZIBO737()) {
+    // Only process key presses when enabled and on supported aircraft
+    if (!(inFlags & xplm_DownFlag) || g_toggled == 0 || !IsSupportedAircraft()) {
         return 1; // Let other handlers process the key
     }
     
@@ -239,9 +453,32 @@ static int KeyCallback(char /*inChar*/, XPLMKeyFlags inFlags, char inVirtualKey,
             HandlePlusMinusKey(desired_plusminus_state);
             return 0; // Consume the key event
         } else {
-            // Handle normal keys (non +/- keys)
+            // Handle normal keys (non +/- keys) 
             char command_string[256];
-            snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_%s", g_fmc_side, button_name);
+            
+            // Convert key name to aircraft-specific format
+            const char* converted_key_name = ConvertKeyName(button_name);
+            
+            // Check if the key is supported by current aircraft
+            if (converted_key_name == nullptr) {
+                // Key not supported by this aircraft (e.g., slash/minus on SR22)
+                return 1; // Let other handlers process the key
+            }
+            
+            // Generate command based on aircraft configuration
+            if (g_current_config->command_format_capt && g_current_config->command_format_fo) {
+                // Aircraft with separate Capt/FO formats (like default 737/A330)
+                const char* format = (g_fmc_side == 1) ? g_current_config->command_format_capt : g_current_config->command_format_fo;
+                snprintf(command_string, sizeof(command_string), format, converted_key_name);
+            } else if (g_current_config->has_side_specific_fmc && g_current_config->command_format_side) {
+                // Aircraft with side-specific FMCs (like ZIBO)
+                snprintf(command_string, sizeof(command_string), g_current_config->command_format_side, g_fmc_side, converted_key_name);
+            } else if (g_current_config->command_format) {
+                // Aircraft with single FMC system (like SR22)
+                snprintf(command_string, sizeof(command_string), g_current_config->command_format, converted_key_name);
+            } else {
+                return 1; // No valid command format
+            }
             
             XPLMCommandRef command = XPLMFindCommand(command_string);
             if (command != NULL) {
@@ -305,8 +542,8 @@ static void UpdateStatusWindow()
         return;
     }
     
-    // Show window only when keyboard input is enabled and on ZIBO 737
-    int should_show = (g_toggled == 1 && IsZIBO737()) ? 1 : 0;
+    // Show window only when keyboard input is enabled and on supported aircraft
+    int should_show = (g_toggled == 1 && IsSupportedAircraft()) ? 1 : 0;
     XPLMSetWindowIsVisible(g_status_window, should_show);
 }
 
@@ -324,9 +561,21 @@ static void DrawStatusWindow(XPLMWindowID inWindowID, void* /*inRefcon*/)
     XPLMDrawTranslucentDarkBox(left, top, right, bottom);
     
     // Prepare status text
-    const char* side_text = (g_fmc_side == 1) ? "CAP" : "FO";
-    char status_text[16];
-    snprintf(status_text, sizeof(status_text), "KB:%s", side_text);
+    char status_text[32];
+    if (g_current_config && g_current_config->has_side_specific_fmc) {
+        const char* side_text = (g_fmc_side == 1) ? "CAP" : "FO";
+        snprintf(status_text, sizeof(status_text), "KB:%s", side_text);
+    } else if (g_current_config) {
+        // For aircraft without side-specific FMCs, show aircraft type
+        const char* aircraft_short = "";
+        if (g_current_aircraft == AIRCRAFT_DEFAULT_737) aircraft_short = "737";
+        else if (g_current_aircraft == AIRCRAFT_DEFAULT_A330) aircraft_short = "330";
+        else if (g_current_aircraft == AIRCRAFT_DEFAULT_SR22) aircraft_short = "SR22";
+        else aircraft_short = "FMC";
+        snprintf(status_text, sizeof(status_text), "KB:%s", aircraft_short);
+    } else {
+        snprintf(status_text, sizeof(status_text), "KB:ON");
+    }
     
     // Draw bright green status text
     float green_color[3] = {0.0f, 1.0f, 0.0f};
@@ -339,9 +588,17 @@ static int* GetPlusMinusStatePtr(int side)
     return (side == 1) ? &g_captain_plusminus_state : &g_fo_plusminus_state;
 }
 
-// Handle +/- key press with intelligent state management using ZIBO's minus command
+// Handle +/- key press with intelligent state management using aircraft-specific minus command
 static void HandlePlusMinusKey(int desired_state)
 {
+    if (!g_current_config) return;
+    
+    // Check if current aircraft supports +/- functionality
+    if (!g_current_config->minus_command && !g_current_config->minus_command_capt && !g_current_config->minus_command_fo) {
+        // Aircraft like SR22 don't have +/- functionality, ignore the key press
+        return;
+    }
+    
     int* current_state = GetPlusMinusStatePtr(g_fmc_side);
     
     // If we already have the desired state, do nothing
@@ -349,9 +606,21 @@ static void HandlePlusMinusKey(int desired_state)
         return;
     }
     
-    // Press the minus button once to toggle state (ZIBO logic: minus toggles between - and +)
+    // Generate minus command based on aircraft configuration
     char command_string[256];
-    snprintf(command_string, sizeof(command_string), "laminar/B738/button/fmc%d_minus", g_fmc_side);
+    if (g_current_config->minus_command_capt && g_current_config->minus_command_fo) {
+        // Aircraft with separate Capt/FO minus commands (like default 737/A330)
+        const char* minus_cmd = (g_fmc_side == 1) ? g_current_config->minus_command_capt : g_current_config->minus_command_fo;
+        strcpy(command_string, minus_cmd);
+    } else if (g_current_config->has_side_specific_fmc && g_current_config->minus_command && strstr(g_current_config->minus_command, "%d")) {
+        // Aircraft with side-specific minus commands (like ZIBO)
+        snprintf(command_string, sizeof(command_string), g_current_config->minus_command, g_fmc_side);
+    } else if (g_current_config->minus_command) {
+        // Aircraft with single minus command
+        strcpy(command_string, g_current_config->minus_command);
+    } else {
+        return; // No minus command available
+    }
     
     XPLMCommandRef command = XPLMFindCommand(command_string);
     if (command != NULL) {
@@ -373,7 +642,16 @@ static int CaptainCommandHandler(XPLMCommandRef /*inCommand*/, XPLMCommandPhase 
 static int FOCommandHandler(XPLMCommandRef /*inCommand*/, XPLMCommandPhase inPhase, void* /*inRefcon*/)
 {
     if (inPhase == xplm_CommandBegin) {
-        ToggleKeyboardInput(2);
+        // Update current config first
+        IsSupportedAircraft();
+        
+        if (g_current_config && !g_current_config->has_side_specific_fmc) {
+            // For aircraft without side-specific FMCs like SR22, FO command acts same as Captain command
+            ToggleKeyboardInput(1); // Use single FMC/GPS
+        } else {
+            // For aircraft with dual FMCs (ZIBO, default 737/A330), use FO side
+            ToggleKeyboardInput(2); // Use FO FMC
+        }
     }
     return 0;
 }
@@ -392,10 +670,10 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     g_icao_dataref = XPLMFindDataRef("sim/aircraft/view/acf_ICAO");
     
     // Create custom commands
-    g_captain_command = XPLMCreateCommand("Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_Captain", 
-                                        "Toggle Keyboard Input (Captain)");
-    g_fo_command = XPLMCreateCommand("Zibo/ZIBO_Keyboard/Toggle_Keyboard_Input_FO", 
-                                   "Toggle Keyboard Input (FO)");
+    g_captain_command = XPLMCreateCommand("Universal/FMC_Keyboard/Toggle_Keyboard_Input_Captain", 
+                                        "Toggle FMC Keyboard Input (Captain)");
+    g_fo_command = XPLMCreateCommand("Universal/FMC_Keyboard/Toggle_Keyboard_Input_FO", 
+                                   "Toggle FMC Keyboard Input (FO)");
     
     // Register command handlers
     XPLMRegisterCommandHandler(g_captain_command, CaptainCommandHandler, 1, NULL);
