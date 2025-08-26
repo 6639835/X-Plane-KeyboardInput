@@ -56,7 +56,7 @@ def test_file_existence():
         'XPLM-SDK/Libraries/Win/XPWidgets_64.lib',
         'XPLM-SDK/Libraries/Lin/XPLM_64.so',
         'XPLM-SDK/Libraries/Lin/XPWidgets_64.so',
-        'src/zibo_keyboard_input.cpp'
+        'src/main.cpp'
     ]
     
     missing_files = []

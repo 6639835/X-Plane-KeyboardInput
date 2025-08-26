@@ -195,7 +195,7 @@ ZIBOKeyboardInput/
 ├── linux_exports.txt           # Linux symbol export list
 ├── .gitignore                  # Git ignore file list
 ├── src/                        # Source code directory
-│   └── zibo_keyboard_input.cpp # Main plugin code
+│   └── main.cpp # Main plugin code
 └── XPLM-SDK/                   # X-Plane SDK
     ├── CHeaders/               # C/C++ header files
     └── Libraries/              # Platform-specific library files

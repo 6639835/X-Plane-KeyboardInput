@@ -37,7 +37,7 @@ if(APPLE)
     
     # Source files
     set(SOURCES
-        src/zibo_keyboard_input.cpp
+        src/main.cpp
     )
     
     # Create dynamic library (X-Plane plugin)
@@ -98,7 +98,7 @@ elseif(WIN32)
     
     # Source files
     set(SOURCES
-        src/zibo_keyboard_input.cpp
+        src/main.cpp
     )
     
     # Create dynamic library (X-Plane plugin)
@@ -151,7 +151,7 @@ elseif(UNIX AND NOT APPLE)
     
     # Source files
     set(SOURCES
-        src/zibo_keyboard_input.cpp
+        src/main.cpp
     )
     
     # Create dynamic library (X-Plane plugin)
