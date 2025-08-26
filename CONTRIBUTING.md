@@ -31,7 +31,7 @@ We welcome contributions in various forms:
 
 1. **Fork and clone the repository**
    ```bash
-   git clone https://github.com/6639835/ZIBOKeyboardInput.git
+   git clone https://github.com/6639835/X-Plane-KeyboardInput.git
    cd ZIBOKeyboardInput
    ```
 

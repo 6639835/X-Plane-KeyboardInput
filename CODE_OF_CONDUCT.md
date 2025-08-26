@@ -133,7 +133,7 @@ For answers to common questions about this code of conduct, see the FAQ at https
 For questions about this Code of Conduct or to report violations:
 
 * **GitHub Issues**: For general questions or public discussions
-* **Project Repository**: https://github.com/6639835/ZIBOKeyboardInput
+* **Project Repository**: https://github.com/6639835/X-Plane-KeyboardInput
 * **Maintainer Contact**: Available in the repository's main README.md file
 
 ## Changes to This Code

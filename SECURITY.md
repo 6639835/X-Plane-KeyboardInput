@@ -56,7 +56,7 @@ We actively maintain and provide security updates for the following versions:
 ### Installation Security
 
 1. **Download from Official Sources**:
-   - Only download from the official GitHub repository: https://github.com/6639835/ZIBOKeyboardInput
+   - Only download from the official GitHub repository: https://github.com/6639835/X-Plane-KeyboardInput
    - Verify the repository is legitimate before downloading
    - Check the commit history and contributor information
 
@@ -196,7 +196,7 @@ The plugin does not include automatic update capabilities for security reasons:
 ### Security Team
 
 For security-related inquiries:
-- **Repository**: https://github.com/6639835/ZIBOKeyboardInput
+- **Repository**: https://github.com/6639835/X-Plane-KeyboardInput
 - **Security Issues**: Use GitHub's private vulnerability reporting
 - **General Security Questions**: Create a discussion thread
 
